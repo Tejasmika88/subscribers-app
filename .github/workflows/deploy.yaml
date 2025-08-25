@@ -35,8 +35,15 @@ jobs:
           docker push $FRONTEND_IMAGE:$TAG
 
       # Setup KinD cluster
+#      - name: Set up KinD
+#        uses: engineerd/setup-kind@v0.5.0
+
       - name: Set up KinD
-        uses: engineerd/setup-kind@v0.5.0
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind create cluster --wait 60s
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
