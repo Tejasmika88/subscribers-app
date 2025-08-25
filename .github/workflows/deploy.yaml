@@ -48,10 +48,29 @@ jobs:
         run: |
           kubectl apply -f k8s/
 
+      - name: Check pod status
+        run: kubectl get pods -o wide
+
       # ---- Wait for Pods to be Ready ----
       - name: Wait for all pods to be ready
         run: |
-          kubectl wait --for=condition=ready pod --all --timeout=120s
+          set +e
+          kubectl wait --for=condition=ready pod --all --timeout=180s
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "Pods did not become ready. Debugging..."
+            echo "---- PODS ----"
+            kubectl get pods -o wide
+            echo "---- BACKEND DESCRIBE ----"
+            kubectl describe pod -l app=backend || true
+            echo "---- FRONTEND DESCRIBE ----"
+            kubectl describe pod -l app=frontend || true
+            echo "---- BACKEND LOGS ----"
+            kubectl logs -l app=backend --tail=50 || true
+            echo "---- FRONTEND LOGS ----"
+            kubectl logs -l app=frontend --tail=50 || true
+            exit 1
+          fi
 
       # ---- Debug: Show resources ----
       - name: Get all resources
