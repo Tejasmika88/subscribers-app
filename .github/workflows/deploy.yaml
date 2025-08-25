@@ -1,0 +1,78 @@
+name: Build & Deploy to Minikube
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: docker.io
+  BACKEND_IMAGE: tejasmika/subscribers-backend
+  FRONTEND_IMAGE: tejasmika/subscribers-backend
+  TAG: latest   # simple for demo; can switch to ${{ github.sha }} later
+
+jobs:
+  build_and_push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.TAG }}
+
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.TAG }}
+
+  deploy:
+    name: Deploy to Minikube
+    needs: build_and_push
+    runs-on: self-hosted   # your Windows runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # If your k8s YAMLs already reference the images with :latest, we don't need to touch them.
+      # Otherwise uncomment the two 'set image' steps to force the new images.
+
+      # - name: Update backend image (optional if YAML already has :latest)
+      #   run: |
+      #     kubectl set image deployment/backend-deployment backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.TAG }} --namespace default --record
+      #
+      # - name: Update frontend image (optional if YAML already has :latest)
+      #   run: |
+      #     kubectl set image deployment/frontend-deployment frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.TAG }} --namespace default --record
+
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/
+
+      - name: Rollout status (backend)
+        run: |
+          kubectl rollout status deploy/backend-deployment --timeout=120s
+
+      - name: Rollout status (frontend)
+        run: |
+          kubectl rollout status deploy/frontend-deployment --timeout=120s
+
+      - name: Show services & ingress
+        run: |
+          kubectl get svc,ingress

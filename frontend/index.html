@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Subscriber App</title>
+</head>
+<body>
+  <h1>Subscriber List</h1>
+
+  <input type="text" id="itemInput" placeholder="Enter subscriber name">
+  <button onclick="addItem()">Add</button>
+
+  <h2>All Subscribers:</h2>
+  <ul id="items"></ul>
+
+  <script>
+    async function fetchItems() {
+      const res = await fetch("/api/items");
+      const data = await res.json();
+      const list = document.getElementById("items");
+      list.innerHTML = "";
+      data.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item.name;
+        list.appendChild(li);
+      });
+    }
+
+    async function addItem() {
+      const name = document.getElementById("itemInput").value;
+      if (!name) return;
+
+      await fetch("/api/items", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({name})
+      });
+      document.getElementById("itemInput").value = "";
+      fetchItems();
+    }
+
+    fetchItems();
+  </script>
+</body>
+</html>
