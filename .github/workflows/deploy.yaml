@@ -47,7 +47,7 @@ jobs:
       - name: Apply Backend Deployment
         run: |
           echo "---- Applying Backend Deployment ----"
-          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/backend.yaml
           
           echo "---- Current backend pods ----"
           kubectl get pods -l app=backend -o wide
@@ -62,7 +62,7 @@ jobs:
       - name: Apply Frontend Deployment
         run: |
           echo "---- Applying Frontend Deployment ----"
-          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/frontend.yaml
           
           echo "---- Current frontend pods ----"
           kubectl get pods -l app=frontend -o wide
