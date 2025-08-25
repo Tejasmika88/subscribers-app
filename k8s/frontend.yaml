@@ -15,7 +15,8 @@ spec:
       containers:
       - name: frontend
         image: tejasmika/frontend:latest
-        #imagePullPolicy: Never
+
+        imagePullPolicy: Never
         ports:
         - containerPort: 80
 ---

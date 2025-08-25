@@ -47,7 +47,7 @@ jobs:
       - name: Apply Backend Deployment
         run: |
           echo "---- Applying Backend Deployment ----"
-          kubectl apply -f k8s/backend.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
           
           echo "---- Current backend pods ----"
           kubectl get pods -l app=backend -o wide
@@ -56,13 +56,13 @@ jobs:
           kubectl describe pod -l app=backend || true
 
           echo "---- Backend deployment image ----"
-          kubectl get deployment backend -o yaml | grep "image:" || true
+          kubectl get deployment backend-deployment -o yaml | grep "image:" || true
 
       # ---------------- FRONTEND DEPLOY ----------------
       - name: Apply Frontend Deployment
         run: |
           echo "---- Applying Frontend Deployment ----"
-          kubectl apply -f k8s/frontend.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
           
           echo "---- Current frontend pods ----"
           kubectl get pods -l app=frontend -o wide
@@ -71,7 +71,7 @@ jobs:
           kubectl describe pod -l app=frontend || true
 
           echo "---- Frontend deployment image ----"
-          kubectl get deployment frontend -o yaml | grep "image:" || true
+          kubectl get deployment frontend-deployment -o yaml | grep "image:" || true
 
       # ---------------- WAIT FOR PODS ----------------
       - name: Wait for pods to be ready
