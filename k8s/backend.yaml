@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: backend:latest
+        image: tejasmika/backend:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 5000
