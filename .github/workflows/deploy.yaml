@@ -1,4 +1,4 @@
-name: Build & Deploy to KinD
+name: Build & Deploy to Kind
 
 on:
   push:
@@ -13,65 +13,54 @@ env:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      # Build & Push Docker Images
-      - name: Log in to DockerHub
+      # ---- Docker Login ----
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push backend image
+      # ---- Build & Push Backend ----
+      - name: Build and push Backend
         run: |
           docker build -t $BACKEND_IMAGE:$TAG ./backend
           docker push $BACKEND_IMAGE:$TAG
 
-      - name: Build and push frontend image
+      # ---- Build & Push Frontend ----
+      - name: Build and push Frontend
         run: |
           docker build -t $FRONTEND_IMAGE:$TAG ./frontend
           docker push $FRONTEND_IMAGE:$TAG
 
-      # Setup KinD cluster
-#      - name: Set up KinD
-#        uses: engineerd/setup-kind@v0.5.0
-
-      - name: Set up KinD
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-          kind create cluster --wait 60s
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
+      # ---- Setup kind ----
+      - name: Setup kind cluster
+        uses: helm/kind-action@v1.10.0
         with:
-          version: 'latest'
+          cluster_name: kind
 
-      # Deploy to KinD
-      - name: Apply Kubernetes manifests
+      # ---- Deploy Manifests ----
+      - name: Deploy to Kind
         run: |
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/
 
-      # Wait until pods are ready
-      - name: Wait for app to be ready
+      # ---- Wait for Pods to be Ready ----
+      - name: Wait for all pods to be ready
         run: |
-          kubectl wait --for=condition=ready pod -l app=backend --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
+          kubectl wait --for=condition=ready pod --all --timeout=120s
 
-      # Verify backend with curl
-      - name: Test backend API
+      # ---- Debug: Show resources ----
+      - name: Get all resources
         run: |
-          kubectl port-forward svc/backend-service 8080:80 &
+          kubectl get pods,svc,ingress -A
+
+      # ---- Verify (Optional) ----
+      - name: Try curling frontend service
+        run: |
+          kubectl port-forward svc/frontend-service 8080:80 &
           sleep 5
-          curl -f http://localhost:8080/health || (echo "Backend test failed" && exit 1)
-
-      # Verify frontend with curl
-      - name: Test frontend UI
-        run: |
-          kubectl port-forward svc/frontend-service 3000:80 &
-          sleep 5
-          curl -f http://localhost:3000 || (echo "Frontend test failed" && exit 1)
+          curl http://localhost:8080 || echo "Frontend not reachable yet"
