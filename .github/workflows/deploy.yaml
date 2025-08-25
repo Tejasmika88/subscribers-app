@@ -1,4 +1,4 @@
-name: Build & Deploy to Minikube
+name: Build & Deploy to KinD
 
 on:
   push:
@@ -6,73 +6,65 @@ on:
 
 env:
   REGISTRY: docker.io
-  BACKEND_IMAGE: tejasmika/subscribers-backend
-  FRONTEND_IMAGE: tejasmika/subscribers-backend
-  TAG: latest   # simple for demo; can switch to ${{ github.sha }} later
+  BACKEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/backend
+  FRONTEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/frontend
+  TAG: latest
 
 jobs:
-  build_and_push:
-    name: Build & Push Images
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
+      # Build & Push Docker Images
+      - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build & Push Backend
-        uses: docker/build-push-action@v5
+      - name: Build and push backend image
+        run: |
+          docker build -t $BACKEND_IMAGE:$TAG ./backend
+          docker push $BACKEND_IMAGE:$TAG
+
+      - name: Build and push frontend image
+        run: |
+          docker build -t $FRONTEND_IMAGE:$TAG ./frontend
+          docker push $FRONTEND_IMAGE:$TAG
+
+      # Setup KinD cluster
+      - name: Set up KinD
+        uses: engineerd/setup-kind@v0.5.0
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
         with:
-          context: ./backend
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.TAG }}
+          version: 'latest'
 
-      - name: Build & Push Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.TAG }}
-
-  deploy:
-    name: Deploy to Minikube
-    needs: build_and_push
-    runs-on: self-hosted   # your Windows runner
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # If your k8s YAMLs already reference the images with :latest, we don't need to touch them.
-      # Otherwise uncomment the two 'set image' steps to force the new images.
-
-      # - name: Update backend image (optional if YAML already has :latest)
-      #   run: |
-      #     kubectl set image deployment/backend-deployment backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.TAG }} --namespace default --record
-      #
-      # - name: Update frontend image (optional if YAML already has :latest)
-      #   run: |
-      #     kubectl set image deployment/frontend-deployment frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.TAG }} --namespace default --record
-
-      - name: Apply manifests
+      # Deploy to KinD
+      - name: Apply Kubernetes manifests
         run: |
-          kubectl apply -f k8s/
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
 
-      - name: Rollout status (backend)
+      # Wait until pods are ready
+      - name: Wait for app to be ready
         run: |
-          kubectl rollout status deploy/backend-deployment --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=backend --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
 
-      - name: Rollout status (frontend)
+      # Verify backend with curl
+      - name: Test backend API
         run: |
-          kubectl rollout status deploy/frontend-deployment --timeout=120s
+          kubectl port-forward svc/backend-service 8080:80 &
+          sleep 5
+          curl -f http://localhost:8080/health || (echo "Backend test failed" && exit 1)
 
-      - name: Show services & ingress
+      # Verify frontend with curl
+      - name: Test frontend UI
         run: |
-          kubectl get svc,ingress
+          kubectl port-forward svc/frontend-service 3000:80 &
+          sleep 5
+          curl -f http://localhost:3000 || (echo "Frontend test failed" && exit 1)
